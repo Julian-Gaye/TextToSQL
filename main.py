@@ -27,3 +27,4 @@ if __name__ == "__main__":
     run_graph("Donne moi la liste des employés qui ont une voiture")
     run_graph("Donne moi la liste des employés")
     run_graph("Qui sont les employés qui travaillent dans la tech ?")
+    run_graph("Supprimer la table employes")

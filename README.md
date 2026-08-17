@@ -31,19 +31,16 @@ flowchart TD
     START(["▶ DÉBUT"]):::startNode
 
     SCHEMA["📋 get_schema\nRécupère le schéma BDD"]:::node
-    REL["🔍 check_relevance\nagent_relevance_checker"]:::agentNode
-    REL_COND{{"🔀 edge_relevance\nCatégorie ?"}}:::syntaxNode
+    REL["🔍 agent_relevance_checker\nAgent de pertinence"]:::agentNode
 
     GEN_CONV["💬 general_conversation\nRéponse hors SQL"]:::execNode
     IMP_SQL["🚫 impossible_sql\nExplication de l'impossibilité"]:::failNode
 
     subgraph LOOP ["🔄 Boucle de Génération & Validation"]
         direction TB
-        GEN["🤖 agent_generator\nGénère la requête SQL"]:::agentNode
-        TOOLS["🔧 tools\n· get_distinct_values"]:::toolNode
-        GEN <-->|"appels d'outils"| TOOLS
+        GEN["🤖 agent_generator\nAgent générateur SQL"]:::agentNode
         SYN{{"⚙️ check_syntax\nEXPLAIN QUERY PLAN"}}:::syntaxNode
-        VAL["✅ agent_validator\nVérifie la logique métier"]:::agentNode
+        VAL["✅ agent_validator\nAgent validateur métier"]:::agentNode
     end
 
     EXEC["▶ execute_sql\nExécute la requête SQLite"]:::execNode
@@ -52,11 +49,10 @@ flowchart TD
 
     START --> SCHEMA
     SCHEMA --> REL
-    REL --> REL_COND
 
-    REL_COND -- "general_conversation" --> GEN_CONV
-    REL_COND -- "impossible_sql" --> IMP_SQL
-    REL_COND -- "feasible_sql" --> GEN
+    REL -- "general_conversation" --> GEN_CONV
+    REL -- "impossible_sql" --> IMP_SQL
+    REL -- "feasible_sql" --> GEN
 
     GEN --> SYN
 
@@ -75,12 +71,17 @@ flowchart TD
     classDef startNode   fill:#22c55e,color:#fff,stroke:none,font-weight:bold
     classDef agentNode   fill:#6366f1,color:#fff,stroke:#818cf8,stroke-width:2px
     classDef node        fill:#38bdf8,color:#000,stroke:#0284c7,stroke-width:2px
-    classDef toolNode    fill:#3b82f6,color:#fff,stroke:#60a5fa,stroke-width:2px
     classDef syntaxNode  fill:#f59e0b,color:#000,stroke:#fbbf24,stroke-width:2px
     classDef execNode    fill:#10b981,color:#fff,stroke:#34d399,stroke-width:2px
     classDef failNode    fill:#ef4444,color:#fff,stroke:none
     classDef successNode fill:#22c55e,color:#fff,stroke:none
 ```
+
+### 🛠 Tools des Agents
+
+Tous les agents du pipeline (`agent_relevance_checker`, `agent_generator`, `agent_validator`) disposent d'un accès aux tools suivants pour interroger dynamiquement la base de données :
+
+- **`get_distinct_values(table_name, column_name)`** : Inspecte les valeurs textuelles uniques d'une colonne donnée pour vérifier l'existence de valeurs métier et connaître la casse/orthographe exacte avant d'écrire ou de valider une clause `WHERE`.
 
 ---
 
