@@ -127,6 +127,20 @@ LANGSMITH_PROJECT="TextToSQL"
 
 ### 4. Lancer l'application
 
+Vous pouvez poser une question directement en ligne de commande :
+
+```bash
+python main.py "REQUETE SQL"
+```
+
+exemple :
+
+```bash
+python main.py "Qui sont les employés qui travaillent dans la tech ?"
+```
+
+Ou exécuter la suite de requêtes d'exemples par défaut (sans argument) :
+
 ```bash
 python main.py
 ```
