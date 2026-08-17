@@ -8,12 +8,13 @@
 
 **TextToSQL** est une application agentique qui prend une question utilisateur en langage naturel et génère, valide, puis exécute automatiquement la requête SQL correspondante sur une base de données SQLite.
 
-Le pipeline est construit avec **LangGraph** et orchestre deux agents LLM spécialisés (générateur et validateur) connectés au sein d'un graphe à état, avec une logique de réessai automatique, une vérification syntaxique et des sorties structurées.
+Le pipeline est construit avec **LangGraph** et orchestre trois agents LLM spécialisés (analyseur de pertinence, générateur et validateur) connectés au sein d'un graphe à état, avec une logique de réessai automatique, une vérification syntaxique et des sorties structurées.
 
 ---
 
 ## Fonctionnalités
 
+- **Aiguillage de Pertinence** — Analyse la question avant toute génération pour classer la demande (`general_conversation`, `impossible_sql`, ou `feasible_sql`).
 - **Agent Générateur** — Génère une requête SQL `SELECT` à partir d'une question en langage naturel, en utilisant des outils pour inspecter le schéma et les valeurs réelles de la base.
 - **Vérification Syntaxique** — Valide la requête syntaxiquement via `EXPLAIN QUERY PLAN` de SQLite, avant toute évaluation par un agent.
 - **Agent Validateur** — Un second agent LLM qui vérifie la *logique métier* de la requête : jointures correctes, filtres appropriés, fidélité à l'intention de l'utilisateur.
@@ -29,35 +30,51 @@ Le pipeline est construit avec **LangGraph** et orchestre deux agents LLM spéci
 flowchart TD
     START(["▶ DÉBUT"]):::startNode
 
-    subgraph LOOP ["🔄 Boucle de Génération"]
-        direction LR
+    SCHEMA["📋 get_schema\nRécupère le schéma BDD"]:::node
+    REL["🔍 check_relevance\nagent_relevance_checker"]:::agentNode
+    REL_COND{{"🔀 edge_relevance\nCatégorie ?"}}:::syntaxNode
+
+    GEN_CONV["💬 general_conversation\nRéponse hors SQL"]:::execNode
+    IMP_SQL["🚫 impossible_sql\nExplication de l'impossibilité"]:::failNode
+
+    subgraph LOOP ["🔄 Boucle de Génération & Validation"]
+        direction TB
         GEN["🤖 agent_generator\nGénère la requête SQL"]:::agentNode
-        TOOLS["🔧 tools\n· get_schema\n· get_distinct_values"]:::toolNode
+        TOOLS["🔧 tools\n· get_distinct_values"]:::toolNode
         GEN <-->|"appels d'outils"| TOOLS
+        SYN{{"⚙️ check_syntax\nEXPLAIN QUERY PLAN"}}:::syntaxNode
+        VAL["✅ agent_validator\nVérifie la logique métier"]:::agentNode
     end
 
-    SYN{{"⚙️ check_syntax\nEXPLAIN QUERY PLAN"}}:::syntaxNode
-    VAL["✅ agent_validator\nVérifie la logique métier"]:::agentNode
     EXEC["▶ execute_sql\nExécute la requête SQLite"]:::execNode
     END_OK(["🟢 FIN — Succès"]):::successNode
-    END_ERR1(["🔴 FIN — Échec"]):::failNode
-    END_ERR2(["🔴 FIN — Échec"]):::failNode
+    END_ERR(["🔴 FIN — Échec (tentatives ≥ 3)"]):::failNode
 
-    START --> GEN
-    GEN -- "terminé ✅" --> SYN
+    START --> SCHEMA
+    SCHEMA --> REL
+    REL --> REL_COND
+
+    REL_COND -- "general_conversation" --> GEN_CONV
+    REL_COND -- "impossible_sql" --> IMP_SQL
+    REL_COND -- "feasible_sql" --> GEN
+
+    GEN --> SYN
 
     SYN -- "✅ valide" --> VAL
     SYN -- "❌ erreur syntaxique\ntentatives < 3" --> GEN
-    SYN -- "❌ tentatives ≥ 3" --> END_ERR1
+    SYN -- "❌ tentatives ≥ 3" --> END_ERR
 
     VAL -- "✅ valide" --> EXEC
-    VAL -- "❌ erreur logique/métier\ntentatives < 3" --> GEN
-    VAL -- "❌ tentatives ≥ 3" --> END_ERR2
+    VAL -- "❌ erreur logique\ntentatives < 3" --> GEN
+    VAL -- "❌ tentatives ≥ 3" --> END_ERR
 
+    GEN_CONV --> END_OK
+    IMP_SQL --> END_OK
     EXEC --> END_OK
 
     classDef startNode   fill:#22c55e,color:#fff,stroke:none,font-weight:bold
     classDef agentNode   fill:#6366f1,color:#fff,stroke:#818cf8,stroke-width:2px
+    classDef node        fill:#38bdf8,color:#000,stroke:#0284c7,stroke-width:2px
     classDef toolNode    fill:#3b82f6,color:#fff,stroke:#60a5fa,stroke-width:2px
     classDef syntaxNode  fill:#f59e0b,color:#000,stroke:#fbbf24,stroke-width:2px
     classDef execNode    fill:#10b981,color:#fff,stroke:#34d399,stroke-width:2px
@@ -73,10 +90,9 @@ flowchart TD
 |---|---|
 | [LangGraph](https://github.com/langchain-ai/langgraph) | Orchestration du graphe multi-agents avec état |
 | [LangChain](https://github.com/langchain-ai/langchain) | Création des agents, binding des outils, templates de prompts |
-| [Google Gemini](https://ai.google.dev/) (`gemini-3.1-flash-lite`) | LLM sous-jacent pour les deux agents |
+| [Google Gemini](https://ai.google.dev/) (`gemini-3.1-flash-lite`) | LLM pour les agents |
 | [Pydantic](https://docs.pydantic.dev/) | Validation des sorties structurées |
 | [SQLite](https://www.sqlite.org/) | Base de données relationnelle locale |
-| [python-dotenv](https://pypi.org/project/python-dotenv/) | Gestion des variables d'environnement |
 
 ---
 
@@ -101,9 +117,12 @@ Créez un fichier `.env` à la racine du projet :
 
 ```env
 GOOGLE_API_KEY=votre_clé_api_google_ici
+LANGSMITH_API_KEY=votre_clé_api_langsmith_ici
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT="TextToSQL"
 ```
 
-> Obtenez une clé API gratuite sur [aistudio.google.com](https://aistudio.google.com/).
+> Obtenez une clé API gratuite sur [aistudio.google.com](https://aistudio.google.com/) et [smith.langchain.com](https://smith.langchain.com/).
 
 ### 4. Lancer l'application
 
@@ -113,35 +132,29 @@ python main.py
 
 ---
 
-## Exemple d'utilisation
+## Exemples d'utilisation
 
-**Entrée :**
-```
-Donne moi la liste des personnes qui travaillent dans la tech
-```
-
-**Trace d'exécution :**
-```
-Agent Générateur
-  → Utilisation du tool 'get_schema'
-  → Utilisation du tool 'get_distinct_values'
-Vérification syntaxique
-Agent Validateur
-  → Utilisation du tool 'get_schema'
-  → Utilisation du tool 'get_distinct_values'
-Exécution requête
-```
-
-**Résultat :**
+### Exemple 1 : Requête SQL faisable
+**Entrée :** `Qui sont les employés qui travaillent dans la tech ?`  
+**Aiguillage :** `feasible_sql`  
+**Résultat SQL :**
 ```sql
 SELECT e.nom, e.prenom
 FROM employes e
 JOIN services s ON e.service_id = s.id
 WHERE s.nom_service = 'Tech & Data';
 ```
-```
-Résultats : [('Lovelace', 'Ada'), ('Turing', 'Alan'), ('Hamilton', 'Margaret')]
-```
+**Résultats :** `[('Lovelace', 'Ada'), ('Turing', 'Alan'), ('Hamilton', 'Margaret')]`
+
+### Exemple 2 : Requête hors sujet
+**Entrée :** `Salut ! comment ça va ?`  
+**Aiguillage :** `general_conversation`  
+**Résultats :** `Ceci n'est pas une requête SQL`
+
+### Exemple 3 : Donnée absente ou infaisable
+**Entrée :** `Donne moi la liste des employés qui ont une voiture`  
+**Aiguillage :** `impossible_sql`  
+**Résultats :** `Il n'y a aucune information concernant les véhicules ou les voitures dans les tables de la base de données.`
 
 ---
 

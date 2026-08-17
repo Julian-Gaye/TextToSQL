@@ -1,3 +1,4 @@
 .env
 __pycache__
 demo_database.db
+.langgraph_api/

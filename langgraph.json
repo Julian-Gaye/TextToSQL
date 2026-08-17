@@ -1,0 +1,9 @@
+{
+  "dockerfile_lines": [],
+  "graphs": {
+    "TextToSQL": "./src/graph/workflow.py:workflow"
+  },
+  "env": "./.env",
+  "python_version": "3.13",
+  "dependencies": ["."]
+}

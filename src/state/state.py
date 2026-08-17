@@ -1,13 +1,21 @@
-from typing import TypedDict, Annotated
-from langchain_core.messages import AnyMessage
-from langgraph.graph import add_messages
+from typing import TypedDict, Literal
 
-class SqlState(TypedDict):
+class InputState(TypedDict):
     user_request: str
-    messages: Annotated[list[AnyMessage], add_messages]
+
+class OutputState(TypedDict):
+    generated_sql: str
+    result: list
+    reason: str
+
+class OverallState(TypedDict):
+    user_request: str
+    schema: str
     generated_sql: str
     syntax_error: str
     attempts: int
     is_valid: bool
     feedback: str
     result: list
+    category: Literal["general_conversation", "impossible_sql", "feasible_sql"]
+    reason: str

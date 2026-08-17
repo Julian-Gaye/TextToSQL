@@ -1,7 +1,6 @@
 from langchain.agents import create_agent
 from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
-from src.tools.get_schema import get_schema
 from src.tools.get_distinct_values import get_distinct_values
 from langchain.agents.structured_output import ToolStrategy
 
@@ -20,7 +19,7 @@ Ta mission est de générer une requête SQL valide pour répondre à la questio
 
 agent_generator = create_agent(
     model=model,
-    tools=[get_schema, get_distinct_values],
+    tools=[get_distinct_values],
     system_prompt=system_prompt,
     response_format=ToolStrategy(StructuredGeneration)
 )

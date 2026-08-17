@@ -1,7 +1,6 @@
 from langchain.agents.structured_output import ToolStrategy
 from langchain.agents import create_agent
 from src.tools.get_distinct_values import get_distinct_values
-from src.tools.get_schema import get_schema
 from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
 
@@ -29,7 +28,7 @@ system_prompt = """Tu es un auditeur et expert SQL senior. Ton rôle est de vali
 
 agent_validator = create_agent(
     model=model,
-    tools=[get_schema, get_distinct_values],
+    tools=[get_distinct_values],
     system_prompt=system_prompt,
     response_format=ToolStrategy(StructuredValidation)
 )

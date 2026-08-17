@@ -8,7 +8,6 @@ def get_schema() -> str:
     ainsi que la structure exacte des colonnes.
     A utiliser dès qu'il faut comprendre quelles tables et colonnes sont disponibles.
     """
-    print("Utilisation du tool 'get_schema'")
     cursor = db_conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
