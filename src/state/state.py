@@ -4,11 +4,13 @@ class InputState(TypedDict):
     user_request: str
 
 class OutputState(TypedDict):
+    status: Literal["success", "refused", "error"]
     generated_sql: str
     result: list
     reason: str
 
 class OverallState(TypedDict):
+    status: Literal["success", "refused", "error"]
     user_request: str
     schema: str
     generated_sql: str

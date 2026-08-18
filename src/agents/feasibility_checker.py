@@ -18,10 +18,10 @@ class StructuredRelevance(BaseModel):
     )
 
 system_prompt = f"""Analyse la demande de l'utilisateur par rapport au schéma de la base de données.
-Tu peux utiliser les tools à ta disposition pour avoir plus d'information.
+Tu peux utiliser les tools à ta disposition pour avoir plus d'information sur la BDD.
 Classifie la demande dans l'une de ces 3 catégories :
 1. "general_conversation" : Toute question ne cherchant pas à extraire des données de la BDD (Salutations, question générale, etc).
-2. "impossible_sql" : L'utilisateur VEUT extraire des données, mais les tables/colonnes demandées n'existent pas ou la logique est infaisable avec ce schéma.
+2. "impossible_sql" : L'utilisateur veut extraire des données, mais les tables/colonnes demandées n'existent pas ou la logique est infaisable avec ce schéma.
 3. "feasible_sql" : L'utilisateur veut extraire des données et la BDD contient ce qu'il faut.
 """
 

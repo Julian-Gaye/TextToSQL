@@ -14,13 +14,14 @@ def run_graph(user_request: str):
 
     result = workflow.invoke(state)
     
-    if result.get("generated_sql") is not None:
+    if result.get("status") == "success":
         print("======== Résultat ========")
-        print(f"Requête SQL : {result.get("generated_sql")}")
-        print(f"Résultats : {result.get("result")}")
+        print(f"Requête SQL : {result.get('generated_sql')}")
+        print(f"Résultats : {result.get('result')}")
     else:
-        print("======== Requête refusée ========")
+        print(f"======== Requête ({result.get('status', 'refused')}) ========")
         print(result.get("reason"))
+
 
 
 if __name__ == "__main__":

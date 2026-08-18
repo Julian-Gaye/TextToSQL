@@ -108,16 +108,19 @@ def node_check_syntax(state: OverallState) -> OverallState:
         return {"syntax_error": str(e)}
 
 def node_agent_validator(state: OverallState) -> OverallState:
+    schema = state.get("schema")
     user_request = state.get("user_request")
     generated_sql = state.get("generated_sql")
 
+    messages = [("system", f"Voici le schéma de la base de données :\n{schema}")]
     input_prompt = (
         f"Question utilisateur : {user_request}\n"
         f"Requête SQL à évaluer : {generated_sql}"
     )
-    
+    messages.append(("user", input_prompt))
+
     response: StructuredValidation = agent_validator.invoke({
-        "messages": [("user", input_prompt)]
+        "messages": messages
     })
 
     structured_response = response.get("structured_response")
@@ -139,14 +142,26 @@ def node_execute_sql(state: OverallState) -> OutputState:
     cursor.execute(state["generated_sql"])
     results = cursor.fetchall()
     return {
+        "status": "success",
         "generated_sql": state["generated_sql"],
         "result": results
     }
 
 def node_general_conversation(state: OverallState) -> OutputState:
     return {
+        "status": "refused",
         "reason": "Ceci n'est pas une requête SQL"
     }
 
 def node_impossible_sql(state: OverallState) -> OutputState:
-    pass
+    return {
+        "status": "refused",
+        "reason": state.get("reason", "La requête ne peut pas être exécutée sur cette base de données.")
+    }
+
+def node_max_attempts_error(state: OverallState) -> OutputState:
+    error_msg = state.get("syntax_error") or state.get("feedback") or "Erreur inconnue."
+    return {
+        "status": "error",
+        "reason": f"Échec de la génération SQL après 3 tentatives. Dernière erreur : {error_msg}"
+    }
