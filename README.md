@@ -152,7 +152,7 @@ python main.py
 ### Exemple 1 : Requête SQL faisable
 **Entrée :** `Qui sont les employés qui travaillent dans la tech ?`  
 **Aiguillage :** `feasible_sql`  
-**Résultat SQL :**
+**Requête SQL :**
 ```sql
 SELECT e.nom, e.prenom
 FROM employes e
@@ -164,12 +164,12 @@ WHERE s.nom_service = 'Tech & Data';
 ### Exemple 2 : Requête hors sujet
 **Entrée :** `Salut ! comment ça va ?`  
 **Aiguillage :** `general_conversation`  
-**Résultats :** `Ceci n'est pas une requête SQL`
+**Raison :** `Ceci n'est pas une requête SQL`
 
 ### Exemple 3 : Donnée absente ou infaisable
 **Entrée :** `Donne moi la liste des employés qui ont une voiture`  
 **Aiguillage :** `impossible_sql`  
-**Résultats :** `Il n'y a aucune information concernant les véhicules ou les voitures dans les tables de la base de données.`
+**Raison :** `Il n'y a aucune information concernant les véhicules ou les voitures dans les tables de la base de données.`
 
 ---
 

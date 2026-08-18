@@ -35,3 +35,4 @@ if __name__ == "__main__":
         run_graph("Qui sont les employés qui travaillent dans la tech ?")
         run_graph("Qui sont les employés qui travaillent dans l'IT?")
         run_graph("Supprimer la table employes")
+        run_graph("Quel est le salaire moyen des chefs de projet ?")
