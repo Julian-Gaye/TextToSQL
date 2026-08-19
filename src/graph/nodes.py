@@ -7,7 +7,24 @@ from src.agents.validator import agent_validator
 from database.database import db_conn
 from src.state.state import InputState, OutputState, OverallState
 
-def node_get_schema(state: InputState) -> OverallState:
+def node_init_state(state: InputState) -> OverallState:
+    user_request = state["user_request"]
+
+    return {
+        "user_request": user_request,
+        "status": "",
+        "schema": "",
+        "generated_sql": "",
+        "syntax_error": "",
+        "attempts": 0,
+        "is_valid": False,
+        "feedback": "",
+        "result": [],
+        "category": "",
+        "reason": "",
+    }
+
+def node_get_schema(state: OverallState) -> OverallState:
     cursor = db_conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
@@ -25,8 +42,8 @@ def node_get_schema(state: InputState) -> OverallState:
     }
 
 def node_agent_check_relevance(state: OverallState) -> OverallState:
-    schema = state.get("schema")
-    user_request = state.get("user_request")
+    schema = state["schema"]
+    user_request = state["user_request"]
 
     messages = [("system", f"Voici le schéma de la BDD :\n{schema}")]
     messages.append(("user", user_request))
@@ -92,25 +109,25 @@ def node_agent_generator(state: OverallState) -> OverallState:
     }
 
 def node_check_syntax(state: OverallState) -> OverallState:
-    sql = state.get("generated_sql")
+    generated_sql = state.get("generated_sql")
     
-    if not sql:
+    if not generated_sql:
         return {"syntax_error": "Aucune requête SQL SELECT n'a été détectée."}
 
-    if any(key in sql.upper() for key in ["DELETE", "DROP", "UPDATE", "INSERT"]):
+    if any(key in generated_sql.upper() for key in ["DELETE", "DROP", "UPDATE", "INSERT"]):
         return {"syntax_error": "Opération interdite (Seul SELECT est autorisé)"}
         
     cursor = db_conn.cursor()
     try:
-        cursor.execute(f"EXPLAIN QUERY PLAN {sql}")
+        cursor.execute(f"EXPLAIN QUERY PLAN {generated_sql}")
         return {"syntax_error": ""}
     except Exception as e:
         return {"syntax_error": str(e)}
 
 def node_agent_validator(state: OverallState) -> OverallState:
-    schema = state.get("schema")
-    user_request = state.get("user_request")
-    generated_sql = state.get("generated_sql")
+    schema = state["schema"]
+    user_request = state["user_request"]
+    generated_sql = state["generated_sql"]
 
     messages = [("system", f"Voici le schéma de la base de données :\n{schema}")]
     input_prompt = (
@@ -138,12 +155,14 @@ def node_agent_validator(state: OverallState) -> OverallState:
     }
 
 def node_execute_sql(state: OverallState) -> OutputState:
+    generated_sql = state["generated_sql"]
+
     cursor = db_conn.cursor()
-    cursor.execute(state["generated_sql"])
+    cursor.execute(generated_sql)
     results = cursor.fetchall()
     return {
         "status": "success",
-        "generated_sql": state["generated_sql"],
+        "generated_sql": generated_sql,
         "result": results
     }
 

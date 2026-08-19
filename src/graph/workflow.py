@@ -1,4 +1,4 @@
-from src.graph.nodes import node_impossible_sql, node_general_conversation, node_max_attempts_error
+from src.graph.nodes import node_impossible_sql, node_general_conversation, node_max_attempts_error, node_init_state
 from src.graph.edges import edge_relevance
 from src.graph.nodes import node_agent_check_relevance
 from langgraph.graph import StateGraph, END
@@ -16,6 +16,7 @@ from src.graph.edges import edge_syntax, edge_validation
 def create_workflow():
     builder = StateGraph(OverallState, input_schema=InputState, output_schema=OutputState)
     
+    builder.add_node("init_state", node_init_state)
     builder.add_node("get_schema", node_get_schema)
     builder.add_node("agent_check_relevance", node_agent_check_relevance)
     builder.add_node("agent_generator", node_agent_generator)
@@ -26,8 +27,9 @@ def create_workflow():
     builder.add_node("impossible_sql", node_impossible_sql)
     builder.add_node("max_attempts_error", node_max_attempts_error)
 
-    builder.set_entry_point("get_schema")
+    builder.set_entry_point("init_state")
 
+    builder.add_edge("init_state", "get_schema")
     builder.add_edge("get_schema", "agent_check_relevance")
     builder.add_conditional_edges("agent_check_relevance", edge_relevance)
     builder.add_edge("general_conversation", END)
