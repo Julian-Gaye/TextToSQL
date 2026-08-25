@@ -8,7 +8,7 @@ def get_distinct_values(table_name: str, column_name: str) -> str:
     Utile pour connaître la casse ou l'orthographe exacte des catégories avant un WHERE.
     """
     cursor = db_conn.cursor()
-    cursor.execute(f"SELECT DISTINCT {column_name} FROM {table_name};")
+    cursor.execute(f'SELECT DISTINCT "{column_name}" FROM "{table_name}";')
     values = cursor.fetchall()
     
     values_info = []

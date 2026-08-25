@@ -6,6 +6,8 @@ from src.agents.generator import agent_generator
 from src.agents.validator import agent_validator
 from database.database import db_conn
 from src.state.state import InputState, OutputState, OverallState
+import sqlglot
+from sqlglot import exp
 
 def node_init_state(state: InputState) -> OverallState:
     user_request = state["user_request"]
@@ -32,7 +34,7 @@ def node_get_schema(state: OverallState) -> OverallState:
     schema_info = []
     for table_name in tables:
         name = table_name[0]
-        cursor.execute(f"PRAGMA table_info({name});")
+        cursor.execute(f'PRAGMA table_info("{name}");')
         columns = cursor.fetchall()
         cols_desc = ", ".join([f"{col[1]} ({col[2]})" for col in columns])
         schema_info.append(f"Table '{name}' -> Colonnes : [{cols_desc}]")
@@ -109,12 +111,22 @@ def node_agent_generator(state: OverallState) -> OverallState:
     }
 
 def node_check_syntax(state: OverallState) -> OverallState:
-    generated_sql = state.get("generated_sql")
+    generated_sql = state.get("generated_sql", "").strip()
     
     if not generated_sql:
         return {"syntax_error": "Aucune requête SQL SELECT n'a été détectée."}
 
-    if any(key in generated_sql.upper() for key in ["DELETE", "DROP", "UPDATE", "INSERT"]):
+    try:
+        parsed_statements = sqlglot.parse(generated_sql, read="sqlite")
+    except Exception as e:
+        return {"syntax_error": f"Erreur de syntaxe SQL : {str(e)}"}
+
+    if len(parsed_statements) != 1 or parsed_statements[0] is None:
+        return {"syntax_error": "Opération interdite (Une seule instruction SQL est autorisée)"}
+
+    statement = parsed_statements[0]
+
+    if not isinstance(statement, exp.Select):
         return {"syntax_error": "Opération interdite (Seul SELECT est autorisé)"}
         
     cursor = db_conn.cursor()

@@ -15,7 +15,7 @@ def get_schema() -> str:
     schema_info = []
     for table_name in tables:
         name = table_name[0]
-        cursor.execute(f"PRAGMA table_info({name});")
+        cursor.execute(f'PRAGMA table_info("{name}");')
         columns = cursor.fetchall()
         cols_desc = ", ".join([f"{col[1]} ({col[2]})" for col in columns])
         schema_info.append(f"Table '{name}' -> Colonnes : [{cols_desc}]")
