@@ -159,12 +159,18 @@ def node_execute_sql(state: OverallState) -> OutputState:
 
     cursor = db_conn.cursor()
     cursor.execute(generated_sql)
-    results = cursor.fetchall()
+    
+    columns = [desc[0] for desc in cursor.description]
+    
+    rows = cursor.fetchall()
+    results = [dict(zip(columns, row)) for row in rows]
+
     return {
         "status": "success",
         "generated_sql": generated_sql,
         "result": results
     }
+
 
 def node_general_conversation(state: OverallState) -> OutputState:
     return {

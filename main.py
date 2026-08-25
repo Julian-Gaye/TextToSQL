@@ -1,5 +1,6 @@
 import sys
 from dotenv import load_dotenv
+from tabulate import tabulate
 from src.graph.workflow import workflow
 
 load_dotenv()
@@ -17,7 +18,7 @@ def run_graph(user_request: str):
     if result.get("status") == "success":
         print("======== Résultat ========")
         print(f"Requête SQL : {result.get('generated_sql')}")
-        print(f"Résultats : {result.get('result')}")
+        print(tabulate(result.get('result'), headers="keys", tablefmt="psql"))
     else:
         print(f"======== Requête ({result.get('status', 'refused')}) ========")
         print(result.get("reason"))
