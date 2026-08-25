@@ -1,3 +1,6 @@
+from langgraph.constants import END
+from langgraph.types import interrupt
+from langgraph.types import Command
 from src.agents.feasibility_checker import StructuredRelevance
 from src.agents.feasibility_checker import agent_relevance_checker
 from src.agents.generator import StructuredGeneration
@@ -163,8 +166,20 @@ def node_agent_validator(state: OverallState) -> OverallState:
     
     return {
         "is_valid": is_valid,
-        "feedback": feedback
+        "feedback": feedback,
+        "status": "success" if is_valid else ""
     }
+
+def node_human_approval(state: OverallState) -> OverallState:
+    is_approved = interrupt({
+        "question": "Voulez-vous exécuter la requête SQL suivante ? : " + state["generated_sql"],
+        "details": state["generated_sql"]
+    })
+    
+    if is_approved:
+        return Command(goto="execute_sql")
+    else:
+        return Command(goto=END)
 
 def node_execute_sql(state: OverallState) -> OutputState:
     generated_sql = state["generated_sql"]
