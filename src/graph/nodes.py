@@ -176,6 +176,10 @@ def node_human_approval(state: OverallState) -> Command[Literal["execute_sql", E
         "question": "Voulez-vous exécuter la requête SQL suivante ? : " + state["generated_sql"],
         "details": state["generated_sql"]
     })
+
+    is_approved = is_approved is True or (
+        isinstance(is_approved, str) and is_approved.strip().lower() in ["o", "oui", "y", "yes", "true", "1"]
+    )
     
     if is_approved:
         return Command(goto="execute_sql")
