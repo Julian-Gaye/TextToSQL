@@ -44,6 +44,4 @@ def create_builder():
     
     return builder
 
-if __name__ == "__main__":
-    graph = create_builder().compile()
-    
+builder = create_builder()

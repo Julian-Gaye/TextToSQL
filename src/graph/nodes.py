@@ -1,3 +1,4 @@
+from typing import Literal
 from langgraph.constants import END
 from langgraph.types import interrupt
 from langgraph.types import Command
@@ -170,7 +171,7 @@ def node_agent_validator(state: OverallState) -> OverallState:
         "status": "success" if is_valid else ""
     }
 
-def node_human_approval(state: OverallState) -> OverallState:
+def node_human_approval(state: OverallState) -> Command[Literal["execute_sql", END]]:
     is_approved = interrupt({
         "question": "Voulez-vous exécuter la requête SQL suivante ? : " + state["generated_sql"],
         "details": state["generated_sql"]
