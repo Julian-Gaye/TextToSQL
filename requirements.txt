@@ -4,3 +4,4 @@ langchain-google-genai==4.3.2
 python-dotenv==1.2.2
 langgraph-cli[inmem]==0.4.31
 sqlglot==30.17.0
+tabulate==0.10.0

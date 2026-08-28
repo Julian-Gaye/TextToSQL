@@ -1,3 +1,6 @@
+from langgraph.graph import add_messages
+from langchain_core.messages import AnyMessage
+from typing import Annotated
 from typing import TypedDict, Literal
 
 class InputState(TypedDict):
@@ -10,6 +13,7 @@ class OutputState(TypedDict):
     reason: str
 
 class OverallState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
     status: Literal["success", "refused", "error"]
     user_request: str
     schema: str

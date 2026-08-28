@@ -1,3 +1,5 @@
+from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from typing import Literal
 from langgraph.constants import END
 from langgraph.types import interrupt
@@ -17,6 +19,7 @@ def node_init_state(state: InputState) -> OverallState:
     user_request = state["user_request"]
 
     return {
+        "messages": [(HumanMessage(content=user_request))], 
         "user_request": user_request,
         "status": "",
         "schema": "",
@@ -50,9 +53,10 @@ def node_get_schema(state: OverallState) -> OverallState:
 def node_agent_check_relevance(state: OverallState) -> OverallState:
     schema = state["schema"]
     user_request = state["user_request"]
+    messages_history = state.get("messages", [])
 
-    messages = [("system", f"Voici le schéma de la BDD :\n{schema}")]
-    messages.append(("user", user_request))
+    messages = [SystemMessage(content=f"Voici le schéma de la BDD :\n{schema}")]
+    messages.extend(messages_history)
     
     response: StructuredRelevance = agent_relevance_checker.invoke({
             "messages": messages
@@ -74,31 +78,29 @@ def node_agent_check_relevance(state: OverallState) -> OverallState:
 
 def node_agent_generator(state: OverallState) -> OverallState:
     schema = state["schema"]
-    user_request = state["user_request"]
     syntax_error = state.get("syntax_error")
     feedback = state.get("feedback")
     previous_sql = state.get("generated_sql")
+    messages_history = state.get("messages", [])
 
-    messages = [("system", f"Voici le schéma de la BDD :\n{schema}")]
+    messages = [SystemMessage(content=f"Voici le schéma de la BDD :\n{schema}")]
+
+    messages.extend(messages_history)
 
     if syntax_error:
-        messages.append((
-            "system",
-            f"LA SYNTAXE DE LA REQUETE SQL PRECEDENTE EST INCORRECTE :\n"
+        messages.append(
+            SystemMessage(content=f"LA SYNTAXE DE LA REQUETE SQL PRECEDENTE EST INCORRECTE :\n"
             f"- Requête : `{previous_sql}`\n"
             f"- Erreur SQL : {syntax_error}\n"
-            f"Consigne : Corrige la requête sql pour résoudre cette erreur."
-        ))
+            f"Consigne : Corrige la requête sql pour résoudre cette erreur.")
+        )
     elif feedback:
-        messages.append((
-            "system",
-            f"LA TENTATIVE PRECEDENTE NE REPOND PAS EXACTEMENT A LA DEMANDE DE L'UTILISATEUR :\n"
+        messages.append(
+            SystemMessage(content=f"LA TENTATIVE PRECEDENTE NE REPOND PAS EXACTEMENT A LA DEMANDE DE L'UTILISATEUR :\n"
             f"- Requête : `{previous_sql}`\n"
             f"- Remarque du validateur : {feedback}\n"
-            f"Consigne : Ajuste la requête sql pour prendre en compte ces remarques."
-        ))
-
-    messages.append(("user", user_request))
+            f"Consigne : Ajuste la requête sql pour prendre en compte ces remarques.")
+        )
 
     response: StructuredGeneration = agent_generator.invoke({"messages": messages})
     structured_response = response.get("structured_response")
@@ -144,13 +146,17 @@ def node_agent_validator(state: OverallState) -> OverallState:
     schema = state["schema"]
     user_request = state["user_request"]
     generated_sql = state["generated_sql"]
+    messages_history = state.get("messages", [])
 
-    messages = [("system", f"Voici le schéma de la base de données :\n{schema}")]
+    messages = [SystemMessage(content=f"Voici le schéma de la base de données :\n{schema}")]
+
+    messages.extend(messages_history)
+
     input_prompt = (
         f"Question utilisateur : {user_request}\n"
         f"Requête SQL à évaluer : {generated_sql}"
     )
-    messages.append(("user", input_prompt))
+    messages.append(HumanMessage(content=input_prompt))
 
     response: StructuredValidation = agent_validator.invoke({
         "messages": messages
@@ -168,7 +174,8 @@ def node_agent_validator(state: OverallState) -> OverallState:
     return {
         "is_valid": is_valid,
         "feedback": feedback,
-        "status": "success" if is_valid else ""
+        "status": "success" if is_valid else "",
+        "messages": [AIMessage(content=f"Requête SQL générée et validée : {generated_sql}")]
     }
 
 def node_human_approval(state: OverallState) -> Command[Literal["execute_sql", END]]:
