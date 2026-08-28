@@ -1,6 +1,6 @@
 # TextToSQL — Agent IA de Langage Naturel vers SQL
 
-> Transforme des questions en langage naturel en requêtes SQL validées et sécurisées grâce à un pipeline multi-agents LangGraph.
+> Transforme des questions en langage naturel en requêtes SQL validées, sécurisées et approuvées par l'utilisateur grâce à un pipeline multi-agents LangGraph.
 
 ---
 
@@ -8,19 +8,22 @@
 
 **TextToSQL** est une application agentique qui prend une question utilisateur en langage naturel et génère, valide, puis exécute automatiquement la requête SQL correspondante sur une base de données SQLite.
 
-Le pipeline est construit avec **LangGraph** et orchestre trois agents LLM spécialisés (analyseur de pertinence, générateur et validateur) connectés au sein d'un graphe à état, avec une logique de réessai automatique, une vérification syntaxique et des sorties structurées.
+Le pipeline est construit avec **LangGraph** et orchestre trois agents LLM spécialisés (analyseur de pertinence, générateur et validateur) connectés au sein d'un graphe à état, avec une logique de réessai automatique, une vérification syntaxique, une validation **Human-in-the-Loop** (interruption et confirmation par l'utilisateur avant toute exécution) et des sorties structurées.
 
 ---
 
 ## Fonctionnalités
 
 - **Aiguillage de Pertinence** — Analyse la question avant toute génération pour classer la demande (`general_conversation`, `impossible_sql`, ou `feasible_sql`).
-- **Agent Générateur** — Génère une requête SQL `SELECT` à partir d'une question en langage naturel, en utilisant des outils pour inspecter le schéma et les valeurs réelles de la base.
-- **Vérification Syntaxique** — Valide la requête syntaxiquement via `EXPLAIN QUERY PLAN` de SQLite, avant toute évaluation par un agent.
-- **Agent Validateur** — Un second agent LLM qui vérifie la *logique métier* de la requête : jointures correctes, filtres appropriés, fidélité à l'intention de l'utilisateur.
-- **Boucle d'auto-correction** — Si la requête est syntaxiquement incorrecte ou logiquement erronée, le graphe la régénère automatiquement (jusqu'à 3 tentatives).
+- **Agent Générateur** — Génère des requêtes SQL `SELECT` à partir de la question de l'utilisateur en langage naturel, en utilisant des outils pour inspecter le schéma et les valeurs réelles de la base.
+- **Validation Syntaxique & AST (`sqlglot`)** — Analyse l'arbre syntaxique pour garantir qu'une seule instruction `SELECT` est soumise et valide son plan d'exécution via `EXPLAIN QUERY PLAN`.
+
+- **Agent Validateur** — Un second agent qui vérifie la *logique métier* de la requête : jointures correctes, filtres appropriés, fidélité à l'intention de l'utilisateur.
+- **Boucle d'Auto-Correction** — En cas d'erreur syntaxique ou de rejet par le validateur, la requête est régénérée automatiquement (jusqu'à 3 tentatives).
+- **Validation Humaine (Human-in-the-Loop)** — Avant toute exécution en base de données, l'utilisateur est sollicité pour valider ou refuser l'exécution de la requête SQL générée.
+- **Mode Chat (`--chat`)** — Support des conversations multi-tours avec mémoire contextuelle.
 - **Garde de Sécurité** — Les instructions `DELETE`, `DROP`, `UPDATE` et `INSERT` sont bloquées avant toute exécution.
-- **Sorties Structurées** — Les deux agents utilisent des modèles Pydantic pour garantir des réponses typées et validées par schéma.
+- **Sorties Structurées** — Les agents utilisent des modèles Pydantic pour garantir des réponses typées et validées par schéma.
 
 ---
 
@@ -30,8 +33,9 @@ Le pipeline est construit avec **LangGraph** et orchestre trois agents LLM spéc
 flowchart TD
     START(["▶ DÉBUT"]):::startNode
 
-    SCHEMA["📋 get_schema\nRécupère le schéma BDD"]:::node
-    REL["🔍 agent_relevance_checker\nAgent de pertinence"]:::agentNode
+    INIT["⚙️ init_state\nInitialisation de l'état"]:::node
+    SCHEMA["📋 get_schema\nRécupération du schéma BDD"]:::node
+    REL["🔍 agent_check_relevance\nAgent de pertinence"]:::agentNode
 
     GEN_CONV["💬 general_conversation\nRéponse hors SQL"]:::execNode
     IMP_SQL["🚫 impossible_sql\nExplication de l'impossibilité"]:::failNode
@@ -39,15 +43,19 @@ flowchart TD
     subgraph LOOP ["🔄 Boucle de Génération & Validation"]
         direction TB
         GEN["🤖 agent_generator\nAgent générateur SQL"]:::agentNode
-        SYN{{"⚙️ check_syntax\nEXPLAIN QUERY PLAN"}}:::syntaxNode
+        SYN{{"⚙️ check_syntax\nsqlglot + EXPLAIN QUERY PLAN"}}:::syntaxNode
         VAL["✅ agent_validator\nAgent validateur métier"]:::agentNode
     end
 
-    EXEC["▶ execute_sql\nExécute la requête SQLite"]:::execNode
-    END_OK(["🟢 FIN — Succès"]):::successNode
+    HUMAN{{"🙋‍♂️ human_approval\nConfirmation Exécution (interrupt)"}}:::humanNode
+    EXEC["▶ execute_sql\nExécution SQLite & Rendu tabulaire"]:::execNode
+
+    END_OK(["🟢 FIN — Succès (avec résultats)"]):::successNode
+    END_NO_EXEC(["🟢 FIN — Succès (requête seule)"]):::successNode
     END_ERR(["🔴 FIN — Échec (tentatives ≥ 3)"]):::failNode
 
-    START --> SCHEMA
+    START --> INIT
+    INIT --> SCHEMA
     SCHEMA --> REL
 
     REL -- "general_conversation" --> GEN_CONV
@@ -60,9 +68,12 @@ flowchart TD
     SYN -- "❌ erreur syntaxique\ntentatives < 3" --> GEN
     SYN -- "❌ tentatives ≥ 3" --> END_ERR
 
-    VAL -- "✅ valide" --> EXEC
+    VAL -- "✅ valide" --> HUMAN
     VAL -- "❌ erreur logique\ntentatives < 3" --> GEN
     VAL -- "❌ tentatives ≥ 3" --> END_ERR
+
+    HUMAN -- "✅ oui (exécuter)" --> EXEC
+    HUMAN -- "❌ non (requête seule)" --> END_NO_EXEC
 
     GEN_CONV --> END_OK
     IMP_SQL --> END_OK
@@ -72,6 +83,7 @@ flowchart TD
     classDef agentNode   fill:#6366f1,color:#fff,stroke:#818cf8,stroke-width:2px
     classDef node        fill:#38bdf8,color:#000,stroke:#0284c7,stroke-width:2px
     classDef syntaxNode  fill:#f59e0b,color:#000,stroke:#fbbf24,stroke-width:2px
+    classDef humanNode   fill:#ec4899,color:#fff,stroke:#f472b6,stroke-width:2px
     classDef execNode    fill:#10b981,color:#fff,stroke:#34d399,stroke-width:2px
     classDef failNode    fill:#ef4444,color:#fff,stroke:none
     classDef successNode fill:#22c55e,color:#fff,stroke:none
@@ -83,17 +95,6 @@ Tous les agents du pipeline (`agent_relevance_checker`, `agent_generator`, `agen
 
 - **`get_distinct_values(table_name, column_name)`** : Inspecte les valeurs textuelles uniques d'une colonne donnée pour vérifier l'existence de valeurs métier et connaître la casse/orthographe exacte avant d'écrire ou de valider une clause `WHERE`.
 
----
-
-## Stack Technique
-
-| Bibliothèque | Utilisation |
-|---|---|
-| [LangGraph](https://github.com/langchain-ai/langgraph) | Orchestration du graphe multi-agents avec état |
-| [LangChain](https://github.com/langchain-ai/langchain) | Création des agents, binding des outils, templates de prompts |
-| [Google Gemini](https://ai.google.dev/) (`gemini-3.1-flash-lite`) | LLM pour les agents |
-| [Pydantic](https://docs.pydantic.dev/) | Validation des sorties structurées |
-| [SQLite](https://www.sqlite.org/) | Base de données relationnelle locale |
 
 ---
 
@@ -112,34 +113,37 @@ cd TextToSQL
 pip install -r requirements.txt
 ```
 
-### 3. Configurer la clé API
+### 3. Configurer les variables d'environnement
 
 Créez un fichier `.env` à la racine du projet :
 
 ```env
-GOOGLE_API_KEY=votre_clé_api_google_ici
-LANGSMITH_API_KEY=votre_clé_api_langsmith_ici
+GOOGLE_API_KEY=votre_cle_api_google_ici
+LANGSMITH_API_KEY=votre_cle_api_langsmith_ici
 LANGSMITH_TRACING=true
 LANGSMITH_PROJECT="TextToSQL"
 ```
 
 > Obtenez une clé API gratuite sur [aistudio.google.com](https://aistudio.google.com/) et [smith.langchain.com](https://smith.langchain.com/).
 
-### 4. Lancer l'application
+## Modes d'Utilisation
 
-Vous pouvez poser une question directement en ligne de commande :
+### 1. Mode Interactif (Chat)
+Pour échanger de manière continue avec l'agent tout en conservant l'historique de la session :
 
 ```bash
-python main.py "REQUETE SQL"
+python main.py --chat
 ```
 
-exemple :
+### 2. Requête Unique en Ligne de Commande
+Pour exécuter une question spécifique directement :
 
 ```bash
 python main.py "Qui sont les employés qui travaillent dans la tech ?"
 ```
 
-Ou exécuter la suite de requêtes d'exemples par défaut (sans argument) :
+### 3. Suite d'Exemples par Défaut
+Pour lancer le script avec les requêtes de démonstration :
 
 ```bash
 python main.py
@@ -159,17 +163,26 @@ FROM employes e
 JOIN services s ON e.service_id = s.id
 WHERE s.nom_service = 'Tech & Data';
 ```
-**Résultats :** `[('Lovelace', 'Ada'), ('Turing', 'Alan'), ('Hamilton', 'Margaret')]`
+**Résultats :**
+```text
++----------+----------+
+| nom      | prenom   |
++----------+----------+
+| Lovelace | Ada      |
+| Turing   | Alan     |
+| Hamilton | Margaret |
++----------+----------+
+```
 
 ### Exemple 2 : Requête hors sujet
 **Entrée :** `Salut ! comment ça va ?`  
 **Aiguillage :** `general_conversation`  
-**Raison :** `Ceci n'est pas une requête SQL`
+**Statut :** `refused` (`Ceci n'est pas une requête SQL`)
 
 ### Exemple 3 : Donnée absente ou infaisable
 **Entrée :** `Donne moi la liste des employés qui ont une voiture`  
 **Aiguillage :** `impossible_sql`  
-**Raison :** `Il n'y a aucune information concernant les véhicules ou les voitures dans les tables de la base de données.`
+**Statut :** `refused` (`Il n'y a aucune information concernant les véhicules ou les voitures dans les tables de la base de données.`)
 
 ---
 
